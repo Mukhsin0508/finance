@@ -1,33 +1,152 @@
+version: '3.8'
+
 services:
-  web:
-    build: .
-    container_name: finance
-    command: >
-      sh -c "
-      python3 manage.py makemigrations --noinput &&
-      python3 manage.py migrate --noinput &&
-      python3 manage.py collectstatic --noinput &&
-      python3 manage.py runserver 0.0.0.0:8000"
-    ports:
-      - "8000:8000"
-    volumes:
-      - ".:/app"
-    depends_on:
-      - db
-
   db:
-    image: postgres:latest
-    env_file:
-      - ./.env
-    ports:
-      - "5433:5432"
-    volumes:
-      - postgres_data_spineup:/var/lib/postgresql/data/
+    image: postgres:16
     environment:
-      POSTGRES_DB: ${DB_NAME}
-      POSTGRES_USER: ${DB_USER}
-      POSTGRES_PASSWORD: ${DB_PASSWORD}
+      - POSTGRES_USER=postgres
+      - POSTGRES_PASSWORD=postgres
+      - POSTGRES_DB=postgres
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    expose:
+      - 5432
+    ports:
+      - "${DOCKER_POSTGRES_PORT:-5433}:5432"
+    networks:
+      - main
+    restart: always
 
+  redis:
+    image: redis
+    volumes:
+      - redis_data:/data
+    expose:
+      - 6379
+    ports:
+      - "${DOCKER_REDIS_PORT:-6379}:6379"
+    networks:
+      - main
+    restart: always
+
+  web:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    entrypoint: /app/docker-entrypoint.sh
+    environment:
+      - DJANGO_SETTINGS_MODULE=.settings
+      - SQL_ENGINE=django.db.backends.postgresql
+      - SQL_DATABASE=postgres
+      - SQL_USERNAME=postgres
+      - SQL_PASSWORD=postgres
+      - SQL_HOST=db
+      - SQL_PORT=5432
+      - REDIS_HOST=redis
+      - REDIS_PORT=6379
+    env_file:
+      - .env
+    volumes:
+      - .:/app
+      - media:/app/media
+      - static:/app/static
+    expose:
+      - "${DOCKER_BACKEND_PORT:-8000}"
+    ports:
+      - "${DOCKER_BACKEND_PORT:-8000}:8000"
+    networks:
+      - main
+    depends_on:
+      - redis
+    restart: always
+
+
+
+#  celery:
+#    build:
+#      context: .
+#      dockerfile: Dockerfile
+#    command: celery -A config worker -l info
+#    environment:
+#      - DJANGO_SETTINGS_MODULE=config.settings
+#      - SQL_ENGINE=django.db.backends.postgresql
+#      - SQL_DATABASE=postgres
+#      - SQL_USERNAME=postgres
+#      - SQL_PASSWORD=postgres
+#      - SQL_HOST=db
+#      - SQL_PORT=5432
+#      - REDIS_HOST=redis
+#      - REDIS_PORT=6379
+#    env_file:
+#      - .env
+#    volumes:
+#      - .:/app
+#    networks:
+#      - main
+#    depends_on:
+#      - web
+#      - redis
+#    restart: always
+#
+#  celery-beat:
+#    build:
+#      context: .
+#      dockerfile: Dockerfile
+#    command: celery -A config beat -l info
+#    environment:
+#      - DJANGO_SETTINGS_MODULE=config.settings
+#      - SQL_ENGINE=django.db.backends.postgresql
+#      - SQL_DATABASE=postgres
+#      - SQL_USERNAME=postgres
+#      - SQL_PASSWORD=postgres
+#      - SQL_HOST=db
+#      - SQL_PORT=5432
+#      - REDIS_HOST=redis
+#      - REDIS_PORT=6379
+#    env_file:
+#      - .env
+#    volumes:
+#      - .:/app
+#    networks:
+#      - main
+#    depends_on:
+#      - celery
+#      - redis
+#    restart: always
+#
+#  flower:
+#    build:
+#      context: .
+#      dockerfile: Dockerfile
+#    command: celery -A config flower -l info
+#    environment:
+#      - DJANGO_SETTINGS_MODULE=config.settings
+#      - SQL_ENGINE=django.db.backends.postgresql
+#      - SQL_DATABASE=postgres
+#      - SQL_USERNAME=postgres
+#      - SQL_PASSWORD=postgres
+#      - SQL_HOST=db
+#      - SQL_PORT=5432
+#      - REDIS_HOST=redis
+#      - REDIS_PORT=6379
+#      - FLOWER_BASIC_AUTH=admin:KhaTT4UTfwrBLc3
+#    env_file:
+#      - .env
+#    ports:
+#      - "${DOCKER_FLOWER_PORT:-5555}:5555"
+#    networks:
+#      - main
+#    depends_on:
+#      - celery
+#      - redis
+#    restart: always
 
 volumes:
-    postgres_data_spineup:
+  media:
+  static:
+  postgres_data:
+  redis_data:
+
+networks:
+  main:
+    driver: bridge
