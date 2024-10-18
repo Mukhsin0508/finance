@@ -1,5 +1,7 @@
-import io
 import os
+
+from django.conf import settings
+from rest_framework.permissions import AllowAny
 from rest_framework.response import Response
 from rest_framework.views import APIView
 import requests
@@ -7,14 +9,9 @@ import pandas as pd
 from decimal import Decimal
 import pickle
 from datetime import timedelta
-import matplotlib.pyplot as plt
 
-from io import BytesIO
-import base64
-from django.http import HttpResponse
-
-
-from config import settings
+from .tasks import fetch_stock_data
+from config.settings import ALPHA_VANTAGE_API_KEY
 from .models import StockData, PredictedStockPrice
 from .serializers import StockPriceSerializer, PredictedStockPriceSerializer, DateRangeValidator
 
@@ -35,50 +32,10 @@ def load_model(filename='linear_model.pkl'):
 
 
 class FetchStockDataView(APIView):
-    def get(self, request, symbol):
-        # Валидируем диапазон дат
-        validator = DateRangeValidator(data=request.query_params)
-        if not validator.is_valid():
-            return Response(validator.errors, status=400)
+    permission_classes = [AllowAny]
+    serializer_class = StockPriceSerializer
+    fetch_stock_data.delay(symbol='BTC', market='USD')
 
-        # Извлекаем start_date и end_date из валидированных данных
-        validated_data = validator.validated_data
-        start_date = validated_data['start_date']
-        end_date = validated_data['end_date']
-
-        # Преобразуем даты в формат строки для API Alpha Vantage
-        start_date_str = start_date.strftime('%Y-%m-%d')
-        end_date_str = end_date.strftime('%Y-%m-%d')
-
-        api_key = settings.ALPHA_VANTAGE_API_KEY
-        url = f'https://www.alphavantage.co/query?function=TIME_SERIES_DAILY&symbol={symbol}&apikey={api_key}'
-        response = requests.get(url)
-
-        if response.status_code == 200:
-            data = response.json().get('Time Series (Daily)', {})
-            stock_objects = []
-            for date, prices in data.items():
-                date_obj = pd.to_datetime(date).date()
-
-                # Фильтруем данные по диапазону дат
-                if start_date <= date_obj <= end_date:
-                    stock_price, created = StockPrice.objects.update_or_create(
-                        symbol=symbol,
-                        date=date_obj,
-                        defaults={
-                            'open_price': prices['1. open'],
-                            'close_price': prices['4. close'],
-                            'high_price': prices['2. high'],
-                            'low_price': prices['3. low'],
-                            'volume': prices['5. volume']
-                        }
-                    )
-                    stock_objects.append(stock_price)
-
-            serializer = StockPriceSerializer(stock_objects, many=True)
-            return Response(serializer.data, status=200)
-        else:
-            return Response({"error": "Failed to fetch data from API"}, status=400)
 
 
 class BacktestView(APIView):
@@ -89,7 +46,7 @@ class BacktestView(APIView):
         long_window = int(request.data.get('long_window', 200))
 
         # Fetch stock data from the database
-        stock_data = StockPrice.objects.filter(symbol=symbol).order_by('date')
+        stock_data = StockData.objects.filter(symbol=symbol).order_by('date')
         if not stock_data.exists():
             return Response({"error": "No data available"}, status=404)
 
@@ -124,7 +81,7 @@ class PredictStockPricesView(APIView):
     def get(self, request, symbol):
 
         # Получаем исторические данные для символа
-        stock_data = StockPrice.objects.filter(symbol=symbol).order_by('date')
+        stock_data = StockData.objects.filter(symbol=symbol).order_by('date')
         if not stock_data.exists():
             return Response({"error": "No data available for prediction"}, status=404)
 
@@ -162,7 +119,7 @@ class CompareStockPricesView(APIView):
     def get(self, request, symbol):
 
         # Получаем реальные данные для указанного символа
-        real_data = StockPrice.objects.filter(symbol=symbol).order_by('date')
+        real_data = StockData.objects.filter(symbol=symbol).order_by('date')
         if not real_data.exists():
             return Response({"error": f"No real data available for {symbol}"}, status=404)
 
@@ -200,84 +157,3 @@ class CompareStockPricesView(APIView):
             "symbol": symbol,
             "comparison": comparison_results
         }, status=200)
-
-
-class ReportGenerationView(APIView):
-    def get(self, request, symbol):
-        print(f"Request received for symbol: {symbol}")
-
-        # Получение реальных данных
-        real_data = StockPrice.objects.filter(symbol=symbol).order_by('date')
-        if not real_data.exists():
-            return Response({"error": "No real data available for symbol: {}".format(symbol)}, status=404)
-
-        # Получение предсказанных данных
-        predicted_data = PredictedStockPrice.objects.filter(symbol=symbol).order_by('date')
-        if not predicted_data.exists():
-            return Response({"error": "No predicted data available for symbol: {}".format(symbol)}, status=404)
-
-        # Преобразование данных в pandas DataFrame
-        real_df = pd.DataFrame(list(real_data.values('date', 'close_price')))
-        predicted_df = pd.DataFrame(list(predicted_data.values('date', 'predicted_close_price')))
-
-        # Генерация графика с использованием Matplotlib
-        fig, ax = plt.subplots(figsize=(10, 6))
-        ax.plot(real_df['date'], real_df['close_price'], label='Actual Prices', color='blue')
-        ax.plot(predicted_df['date'], predicted_df['predicted_close_price'], label='Predicted Prices', color='green')
-        ax.set_xlabel('Date')
-        ax.set_ylabel('Price')
-        ax.set_title(f'Stock Price Prediction vs Actual for {symbol}')
-        ax.legend()
-
-        # Сохранение графика в буфер
-        buf = io.BytesIO()
-        plt.savefig(buf, format='png')
-        buf.seek(0)
-        plt.close(fig)
-
-        # Генерация PDF отчета с графиком
-        if request.query_params.get('format') == 'pdf':
-            # Создание PDF отчета
-            pdf_buffer = io.BytesIO()
-            pdf_canvas = canvas.Canvas(pdf_buffer, pagesize=letter)
-
-            # Заголовок PDF
-            pdf_canvas.drawString(100, 800, f"Stock Prediction Report for {symbol}")
-
-            # Отображение ключевых метрик
-            key_metrics = {
-                "symbol": symbol,
-                "start_date": real_df['date'].min(),
-                "end_date": real_df['date'].max(),
-                "mean_real_price": real_df['close_price'].mean(),
-                "mean_predicted_price": predicted_df['predicted_close_price'].mean(),
-                "price_difference": abs(real_df['close_price'].mean() - predicted_df['predicted_close_price'].mean())
-            }
-            pdf_canvas.drawString(100, 750, f"Symbol: {key_metrics['symbol']}")
-            pdf_canvas.drawString(100, 730, f"Start Date: {key_metrics['start_date']}")
-            pdf_canvas.drawString(100, 710, f"End Date: {key_metrics['end_date']}")
-            pdf_canvas.drawString(100, 690, f"Mean Real Price: {key_metrics['mean_real_price']:.2f}")
-            pdf_canvas.drawString(100, 670, f"Mean Predicted Price: {key_metrics['mean_predicted_price']:.2f}")
-            pdf_canvas.drawString(100, 650, f"Price Difference: {key_metrics['price_difference']:.2f}")
-
-            # Добавление графика из base64
-            img_data = base64.b64decode(request.data.get('graph_base64'))
-            img_buffer = BytesIO(img_data)
-            pdf_canvas.drawImage(img_buffer, 50, 400, width=500, height=300)
-
-            # Закрытие PDF файла
-            pdf_canvas.showPage()
-            pdf_canvas.save()
-
-            # Вернуть PDF отчет
-            pdf_buffer.seek(0)
-            response = HttpResponse(pdf_buffer, content_type='application/pdf')
-            response['Content-Disposition'] = f'attachment; filename="{symbol}_report.pdf"'
-            return response
-
-        # Альтернативно можно вернуть JSON с ключевыми метриками и графиком
-        img_base64 = base64.b64encode(buf.getvalue()).decode('utf-8')
-        return Response({
-            # "key_metrics": key_metrics,
-            "graph_base64": img_base64
-        })

@@ -48,7 +48,8 @@ INSTALLED_APPS = [
     "django.contrib.messages",
     "django.contrib.staticfiles",
     'rest_framework',
-    'finance',
+    'finance.apps.FinanceConfig',
+    'drf_yasg'
 ]
 
 MIDDLEWARE = [
@@ -96,9 +97,12 @@ if POSTGRES:
             'USER': os.getenv('POSTGRES_USER'),
             'PASSWORD': os.getenv('POSTGRES_PASSWORD'),
             'HOST': os.getenv('DB_HOST'),
-            'PORT': os.getenv('DB_PORT')
+            'PORT': os.getenv('DB_PORT'),
         }
     }
+    print(os.getenv('POSTGRES_DB'))
+    print(os.getenv('POSTGRES_USER'))
+    print(os.getenv('POSTGRES_PASSWORD'))
 else:
     DATABASES = {
         'default': {
@@ -114,6 +118,13 @@ CACHES = {
         'LOCATION': 'redis://redis_db:6379/2',
     }
 }
+
+# ======== Celery Configuration Options ========
+CELERY_BROKER_URL = 'redis://localhost:6379/0'
+CELERY_RESULT_BACKEND = 'redis://localhost:6379/0'
+CELERY_ACCEPT_CONTENT = ['json']
+CELERY_TASK_SERIALIZER = 'json'
+CELERY_RESULT_SERIALIZER = 'json'
 
 
 
@@ -151,7 +162,11 @@ USE_TZ = True
 # Static files (CSS, JavaScript, Images)
 # https://docs.djangoproject.com/en/5.1/howto/static-files/
 
-STATIC_URL = "static/"
+STATIC_URL = 'static/'
+STATIC_ROOT = os.path.join(BASE_DIR / 'static')
+
+MEDIA_URL = 'media/'
+MEDIA_ROOT = os.path.join(BASE_DIR / 'media')
 
 # Default primary key field type
 # https://docs.djangoproject.com/en/5.1/ref/settings/#default-auto-field

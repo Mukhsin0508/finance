@@ -4,7 +4,6 @@ from django.utils import timezone
 from rest_framework import serializers
 from .models import StockData, PredictedStockPrice
 
-
 class StockPriceSerializer(serializers.ModelSerializer):
     class Meta:
         model = StockData

@@ -13,6 +13,8 @@ RUN pip install --upgrade pip --root-user-action=ignore && \
     rm -rf /root/.cache/pip /root/.cache && \
     rm -rf /var/lib/apt/lists/*
 
+RUN python manage.py collectstatic --noinput
+
 COPY . /app
 
 # Default command to run the Django app (or any custom command)
