@@ -1,21 +1,14 @@
-FROM python:3.12-slim
+FROM python:3.11-slim-buster
 
-ENV PYTHONDONTWRITEBYTECODE=1
-ENV PYTHONUNBUFFERED=1
+ENV PIP_DISABLE_PIP_VERSION_CHECK 1
+ENV PYTHONDONTWRITEBYTECODE 1
+ENV PYTHONUNBUFFERED 1
 
+RUN mkdir /app
 WORKDIR /app
-
-COPY ./requirements.txt /app/requirements.txt
-
-RUN pip install --upgrade pip --root-user-action=ignore && \
-    pip install setuptools && \
-    pip install -r requirements.txt && \
-    rm -rf /root/.cache/pip /root/.cache && \
-    rm -rf /var/lib/apt/lists/*
-
-RUN python manage.py collectstatic --noinput
-
-COPY . /app
-
-# Default command to run the Django app (or any custom command)
-# CMD ["python", "manage.py", "runserver", "0.0.0.0:8000"]
+ENV PATH="/home/app/.local/bin:${PATH}"
+COPY ./requirements.txt .
+RUN pip install -r requirements.txt
+RUN pip install watchdog
+COPY . .
+RUN chmod +x /app/docker-entrypoint.sh

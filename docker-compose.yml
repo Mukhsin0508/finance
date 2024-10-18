@@ -62,31 +62,31 @@ services:
 
 
 
-#  celery:
-#    build:
-#      context: .
-#      dockerfile: Dockerfile
-#    command: celery -A config worker -l info
-#    environment:
-#      - DJANGO_SETTINGS_MODULE=config.settings
-#      - SQL_ENGINE=django.db.backends.postgresql
-#      - SQL_DATABASE=postgres
-#      - SQL_USERNAME=postgres
-#      - SQL_PASSWORD=postgres
-#      - SQL_HOST=db
-#      - SQL_PORT=5432
-#      - REDIS_HOST=redis
-#      - REDIS_PORT=6379
-#    env_file:
-#      - .env
-#    volumes:
-#      - .:/app
-#    networks:
-#      - main
-#    depends_on:
-#      - web
-#      - redis
-#    restart: always
+  celery:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    command: celery -A config worker -l info
+    environment:
+      - DJANGO_SETTINGS_MODULE=config.settings
+      - SQL_ENGINE=django.db.backends.postgresql
+      - SQL_DATABASE=postgres
+      - SQL_USERNAME=postgres
+      - SQL_PASSWORD=postgres
+      - SQL_HOST=db
+      - SQL_PORT=5432
+      - REDIS_HOST=redis
+      - REDIS_PORT=6379
+    env_file:
+      - .env
+    volumes:
+      - .:/app
+    networks:
+      - main
+    depends_on:
+      - web
+      - redis
+    restart: always
 #
 #  celery-beat:
 #    build:

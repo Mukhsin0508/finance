@@ -1,20 +1,12 @@
-from __future__ import absolute_import, unicode_literals
-
 import os
 from celery import Celery
-from dotenv import load_dotenv
+from celery.utils.log import get_task_logger
 
-load_dotenv()
 
-os.getenv('DJANGO_SETTINGS_MODULE', 'config.settings')
+os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'config.settings')
 
-app = Celery('config')
+logger = get_task_logger(__name__)
 
-app.config_from_object('django.conf.settings', namespace='CELERY')
-
+app = Celery('finance')
+app.config_from_object('django.conf:settings', namespace='CELERY')
 app.autodiscover_tasks()
-
-
-@app.task(bind=True)
-def debug_task(self):
-    print(f"Request: {self.request!r}")

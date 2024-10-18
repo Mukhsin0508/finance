@@ -1,9 +1,8 @@
-import requests
-from celery import shared_task
-
-from config import settings
-from finance.models import StockData
 from datetime import datetime
+import requests
+from django.conf import settings
+from celery import shared_task
+from .models import StockData
 
 ALPHA_VANTAGE_API_KEY = settings.ALPHA_VANTAGE_API_KEY
 
@@ -26,11 +25,12 @@ def fetch_stock_data(symbol='BTC', market='USD'):
             symbol=symbol,
             date=datetime.strptime(date, '%Y-%m-%d').date(),
             defaults={
-                'open_price':daily_data['1a. open (USD)'],
-                'close_price':daily_data['4a. close (USD)'],
-                'high_price':daily_data['2a. high (USD)'],
-                'low_price':daily_data['3a. low (USD)'],
-                'volume':daily_data['5. volume'], }
+                'open_price': daily_data.get('1a. open (USD)', 0),  # Provide default value 0 if the key is missing
+                'close_price': daily_data.get('4a. close (USD)', 0),
+                'high_price': daily_data.get('2a. high (USD)', 0),
+                'low_price': daily_data.get('3a. low (USD)', 0),
+                'volume': daily_data.get('5. volume', 0),
+            }
         )
 
     return f"Cryptocurrency data for {symbol} has been fetched successfully."

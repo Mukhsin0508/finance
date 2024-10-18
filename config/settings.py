@@ -100,9 +100,6 @@ if POSTGRES:
             'PORT': os.getenv('DB_PORT'),
         }
     }
-    print(os.getenv('POSTGRES_DB'))
-    print(os.getenv('POSTGRES_USER'))
-    print(os.getenv('POSTGRES_PASSWORD'))
 else:
     DATABASES = {
         'default': {
@@ -120,12 +117,22 @@ CACHES = {
 }
 
 # ======== Celery Configuration Options ========
-CELERY_BROKER_URL = 'redis://localhost:6379/0'
-CELERY_RESULT_BACKEND = 'redis://localhost:6379/0'
-CELERY_ACCEPT_CONTENT = ['json']
-CELERY_TASK_SERIALIZER = 'json'
-CELERY_RESULT_SERIALIZER = 'json'
+# CELERY_BROKER_URL = 'redis://localhost:6379/0'
+# CELERY_RESULT_BACKEND = 'redis://localhost:6379/0'
+#
+# CELERY_ACCEPT_CONTENT = ['json']
+# CELERY_TASK_SERIALIZER = 'json'
+# CELERY_RESULT_SERIALIZER = 'json'
 
+
+REDIS_HOST = os.environ.get("REDIS_HOST", default="localhost")
+REDIS_PORT = os.environ.get("REDIS_PORT", default="6379")
+REDIS_URL = f"redis://{REDIS_HOST}:{REDIS_PORT}"
+CELERY_TIMEZONE = "Asia/Tashkent"
+CELERY_TASK_TRACK_STARTED = True
+CELERY_TASK_TIME_LIMIT = 5 * 60
+CELERY_BROKER_URL = os.environ.get('CELERY_BROKER_URL', REDIS_URL)
+CELERY_RESULT_BACKEND = os.environ.get('CELERY_RESULT_BACKEND', REDIS_URL)
 
 
 # Password validation
@@ -145,6 +152,15 @@ AUTH_PASSWORD_VALIDATORS = [
         "NAME": "django.contrib.auth.password_validation.NumericPasswordValidator",
     },
 ]
+
+REST_FRAMEWORK = {
+    'DEFAULT_PERMISSION_CLASSES': [
+        'rest_framework.permissions.AllowAny',
+    ],
+    'DEFAULT_SCHEMA_CLASS': 'rest_framework.schemas.coreapi.AutoSchema',
+
+    'DEFAULT_AUTHENTICATION_CLASSES': [],
+}
 
 
 # Internationalization
